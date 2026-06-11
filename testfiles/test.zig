@@ -1,18 +1,12 @@
-// imports
-
 const std = @import("std");
 const posix = std.posix;
 
-// data
+const stdin_fd = posix.STDIN_FILENO;
+const stdout_fd = std.Io.File.stdout();
 
 inline fn CTRL_KEY(k: u8) u8 {
     return k & 0x1f; // 0x1f is the address for ctrl key
 }
-
-const stdin_fd = posix.STDIN_FILENO;
-// const stdout_fd = std.Io.File.stdout();
-
-// terminal
 
 fn enableRawMode() !void {
     var raw = try posix.tcgetattr(stdin_fd); // anything that may returns an error we must put try in front of it
@@ -20,15 +14,15 @@ fn enableRawMode() !void {
     // terminal config
 
     raw.iflag.IXON = false;
-    //raw.iflag.ICRNL = false;
+    raw.iflag.ICRNL = false;
     raw.iflag.BRKINT = false;
     raw.iflag.INPCK = false;
     raw.iflag.ISTRIP = false;
 
     raw.oflag.OPOST = false;
 
-    //raw.lflag.ECHO = false;
-    //raw.lflag.ICANON = false;
+    raw.lflag.ECHO = false;
+    raw.lflag.ICANON = false;
     raw.lflag.ISIG = false;
     raw.lflag.IEXTEN = false;
 
@@ -49,52 +43,31 @@ fn editorReadKey() ![1]u8 {
     return buf;
 }
 
-fn editorProcessKeypress(io: std.Io) !void {
+fn editorProcessKeypress() !void {
     const buf = try editorReadKey();
 
-    std.debug.print("{any}\n", .{buf[0]});
-
-    var writer_buf: [1024]u8 = undefined;
-    var writer = std.Io.File.stdout().writer(io, &writer_buf);
-
     switch (buf[0]) {
-        CTRL_KEY('q') => {
-            try writer.interface.writeAll("\x1b[2J");
-            try writer.interface.writeAll("\x1b[H");
-            try writer.flush();
-            std.process.exit(1);
-        },
-        else => {
-            if (buf[0] == '\r') {
-                try writer.interface.writeAll("\r\n");
-            } else {
-                try writer.interface.writeAll(&buf);
-            }
-            try writer.flush();
-        },
+        CTRL_KEY('q') => std.process.exit(1),
+        else => {},
     }
 }
 
-// output
-
 fn editorRefreshScreen(io: std.Io) !void {
     var writer_buf: [1024]u8 = undefined;
-    var writer = std.Io.File.stdout().writer(io, &writer_buf);
+    var writer = stdout_fd.writer(io, &writer_buf);
 
     _ = try writer.interface.writeAll("\x1b[2J");
     _ = try writer.interface.writeAll("\x1b[H");
     try writer.flush();
 }
 
-// init
-
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
 
-    try enableRawMode();
+    // try enableRawMode();
 
     while (true) {
         try editorRefreshScreen(io);
-        try editorProcessKeypress(io);
+        try editorProcessKeypress();
     }
 }
